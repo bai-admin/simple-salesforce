@@ -236,12 +236,15 @@ def _convert_dict_to_csv(
     writer = csv.DictWriter(dict_to_csv_file,
                             fieldnames=keys,
                             delimiter=column_delimiter,
-                            lineterminator=line_ending
+                            lineterminator=line_ending,
+                            quoting=csv.QUOTE_ALL,  # Quote all fields
+                            doublequote=True        # Escape double quotes by doubling them
                             )
     writer.writeheader()
     for row in data:
         writer.writerow(row)
     return dict_to_csv_file.getvalue()
+
 
 
 class SFBulk2Handler:
