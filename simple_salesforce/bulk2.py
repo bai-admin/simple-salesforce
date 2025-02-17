@@ -183,82 +183,105 @@ def _split_csv(
         records: Optional[str] = None,
         max_records: Optional[int] = None,
         column_delimiter: Union[ColumnDelimiter, str] = ColumnDelimiter.COMMA,
-        line_ending: Union[LineEnding, str] = LineEnding.LF
+        line_ending: Union[LineEnding, str] = LineEnding.LF,
         ) -> Generator[Tuple[int, str], None, None]:
-    
-    max_bytes = MAX_INGEST_JOB_FILE_SIZE - 1 * 1024 * 1024
-    
-    if filename:
-        # Read and reformat the file first
-        with open(filename, 'r', encoding='utf-8') as f:
-            reader = csv.reader(f)
-            header = next(reader)
-            records = _format_csv_data(
-                list(reader),
-                column_delimiter=column_delimiter,
-                line_ending=line_ending,
-                header=header
-            )
-    
-    # Now we know records is properly formatted
-    input_file = io.StringIO(records)
-    reader = csv.reader(input_file, 
-                       delimiter=column_delimiter,
-                       lineterminator=line_ending)
-    header = next(reader)
-    
-    output = io.StringIO()
-    writer = csv.writer(output,
-                       delimiter=column_delimiter,
-                       lineterminator=line_ending,
-                       quoting=csv.QUOTE_ALL,
-                       doublequote=True
+    """Split a CSV file into chunks to avoid exceeding the Salesforce
+    bulk 2.0 API limits.
+
+    Arguments:
+        * filename -- csv file
+        * max_records -- the number of records per chunk, None for auto size
+    """
+    total_records = _count_csv(filename=filename,
+                               skip_header=True
+                               ) if \
+        filename else \
+        _count_csv(data=records,
+                   skip_header=True,
+                   line_ending=line_ending,
+                   column_delimiter=column_delimiter
+                   )
+    csv_data_size = os.path.getsize(filename) if filename else sys.getsizeof(
+        records
+        )
+    _max_records: int = max_records or total_records
+    _max_records = min(_max_records,
+                       total_records
                        )
-    
-    def write_chunk(rows: List[List[str]], records_in_chunk: int, include_header: bool = True) -> Tuple[int, str]:
-        output.seek(0)
-        output.truncate()
-        if include_header:
-            writer.writerow(header)
-        writer.writerows(rows)
-        return records_in_chunk, output.getvalue()
-    
-    current_chunk: List[List[str]] = []
-    current_size = 0
-    records_in_chunk = 0
-    
-    # Get header size once
-    header_size = len(write_chunk([], 0, True)[1].encode('utf-8'))
-    current_size = header_size
-    
-    effective_max_records = min(
-        max_records or DEFAULT_QUERY_PAGE_SIZE,
-        DEFAULT_QUERY_PAGE_SIZE
-    )
-    
-    for row in reader:
-        # Get row size by writing to buffer and checking difference
-        output.seek(0)
-        start_pos = output.tell()
-        writer.writerow(row)
-        row_size = len(output.getvalue().encode('utf-8')) - start_pos
-        
-        if (records_in_chunk >= effective_max_records) or \
-           (current_size + row_size >= max_bytes):
-            # Yield current chunk
-            yield write_chunk(current_chunk, records_in_chunk)
-            current_chunk = []
-            current_size = header_size
-            records_in_chunk = 0
-        
-        current_chunk.append(row)
-        current_size += row_size
-        records_in_chunk += 1
-    
-    if records_in_chunk > 0:
-        yield write_chunk(current_chunk, records_in_chunk)
-    
-    return None
+    max_bytes = min(
+        csv_data_size,
+        MAX_INGEST_JOB_FILE_SIZE - 1 * 1024 * 1024
+        )  # -1 MB for sentinel
+    records_size = 0
+    bytes_size = 0
+    buff: List[str] = []
+    if filename:
+        with open(filename,
+                  encoding="utf-8"
+                  ) as bis:
+            header = bis.readline()
+            for line in bis:
+                records_size += 1
+                bytes_size += len(line.encode("utf-8"))
+                if records_size > _max_records or bytes_size > max_bytes:
+                    if buff:
+                        yield records_size - 1, header + "".join(buff)
+                    buff = [line]
+                    records_size = 1
+                    bytes_size = len(line.encode("utf-8"))
+                else:
+                    buff.append(line)
+            if buff:
+                yield records_size, header + "".join(buff)
+    else:
+        assert records is not None
+        #header = records.splitlines(True)[0]
+        #for line in records.splitlines(True)[1:]:
+        reader = csv.reader(StringIO(records),
+                            quoting=csv.QUOTE_ALL,
+                            doublequote=True,
+                            delimiter=column_delimiter,
+                            lineterminator=line_ending
+                        )
+        header = next(reader)
+        writer = csv.writer(StringIO(), quoting=csv.QUOTE_ALL, doublequote=True, lineterminator=line_ending, delimiter=column_delimiter)
+        for row in reader:
+            line = writer.writerow(row)
+            records_size += 1
+            bytes_size += len(line.encode("utf-8"))
+            if records_size > _max_records or bytes_size > max_bytes:
+                if buff:
+                    yield records_size - 1, header + "".join(buff)
+                buff = [line]
+                records_size = 1
+                bytes_size = len(line.encode("utf-8"))
+            else:
+                buff.append(line)
+        if buff:
+            yield records_size, header + "".join(buff)
+
+
+def _count_csv(
+        filename: Optional[str] = None,
+        data: Optional[str] = None,
+        skip_header: bool = False,
+        line_ending: LineEnding = LineEnding.LF,
+        column_delimiter: Union[ColumnDelimiter, str] = ColumnDelimiter.COMMA,
+        ) -> int:
+    """Count the number of records in a CSV file."""
+    if filename:
+        with open(filename, encoding="utf-8") as f:
+            reader = csv.reader(f)
+            count = sum(1 for _ in reader)
+    elif data:
+        reader = csv.reader(StringIO(data), quoting=csv.QUOTE_ALL, doublequote=True, lineterminator=line_ending, delimiter=column_delimiter)
+        count = sum(1 for _ in reader)
+    else:
+        raise ValueError("Either filename or data must be provided")
+
+    if skip_header:
+        count -= 1
+    return count
 
 
 
