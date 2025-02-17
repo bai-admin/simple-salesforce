@@ -925,11 +925,27 @@ class SFBulk2Type:
                       MAX_INGEST_JOB_PARALLELISM
                       )
         split_data = _split_csv(filename=csv_file,
-                                max_records=batch_size
+                                max_records=batch_size,
+                                column_delimiter=_delimiter_char.get(
+                                    column_delimiter,
+                                    ColumnDelimiter.COMMA
+                                    ),
+                                line_ending=_line_ending_char.get(
+                                    line_ending,
+                                    LineEnding.LF
+                                    )
                                 ) \
             if \
             csv_file else _split_csv(records=records,
-                                     max_records=batch_size
+                                     max_records=batch_size,
+                                    column_delimiter=_delimiter_char.get(
+                                        column_delimiter,
+                                        ColumnDelimiter.COMMA
+                                        ),
+                                    line_ending=_line_ending_char.get(
+                                        line_ending,
+                                        LineEnding.LF
+                                        )
                                      )
         if workers == 1:
             for data in split_data:
