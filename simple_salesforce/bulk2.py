@@ -5,6 +5,7 @@ import csv
 import datetime
 import http.client as http
 import io
+from io import StringIO
 import json
 import math
 import os
@@ -137,7 +138,7 @@ def _format_csv_data(
     Returns:
         Properly formatted CSV string with all fields quoted and escaped
     """
-    output = io.StringIO()
+    output = StringIO()
     
     if isinstance(data[0], dict):
         # Dict input - use DictWriter
@@ -244,9 +245,13 @@ def _split_csv(
                             lineterminator=line_ending
                         )
         header = next(reader)
-        writer = csv.writer(StringIO(), quoting=csv.QUOTE_ALL, doublequote=True, lineterminator=line_ending, delimiter=column_delimiter)
+        string_buffer = StringIO()
+        writer = csv.writer(string_buffer, quoting=csv.QUOTE_ALL, doublequote=True, lineterminator=line_ending, delimiter=column_delimiter)
         for row in reader:
-            line = writer.writerow(row)
+            string_buffer.seek(0)
+            string_buffer.truncate()
+            writer.writerow(row)
+            line = string_buffer.getvalue()
             records_size += 1
             bytes_size += len(line.encode("utf-8"))
             if records_size > _max_records or bytes_size > max_bytes:
