@@ -137,7 +137,7 @@ def _format_csv_data(
     Returns:
         Properly formatted CSV string with all fields quoted and escaped
     """
-    output = StringIO()
+    output = io.StringIO()
     
     if isinstance(data[0], dict):
         # Dict input - use DictWriter
@@ -201,13 +201,13 @@ def _split_csv(
             )
     
     # Now we know records is properly formatted
-    input_file = StringIO(records)
+    input_file = io.StringIO(records)
     reader = csv.reader(input_file, 
                        delimiter=column_delimiter,
                        lineterminator=line_ending)
     header = next(reader)
     
-    output = StringIO()
+    output = io.StringIO()
     writer = csv.writer(output,
                        delimiter=column_delimiter,
                        lineterminator=line_ending,
