@@ -247,6 +247,13 @@ def _split_csv(
         header = next(reader)
         string_buffer = StringIO()
         writer = csv.writer(string_buffer, quoting=csv.QUOTE_ALL, doublequote=True, lineterminator=line_ending, delimiter=column_delimiter)
+        
+        # Format header as CSV string
+        string_buffer.seek(0)
+        string_buffer.truncate()
+        writer.writerow(header)
+        header_str = string_buffer.getvalue()
+        
         for row in reader:
             string_buffer.seek(0)
             string_buffer.truncate()
@@ -256,14 +263,14 @@ def _split_csv(
             bytes_size += len(line.encode("utf-8"))
             if records_size > _max_records or bytes_size > max_bytes:
                 if buff:
-                    yield records_size - 1, header + "".join(buff)
+                    yield records_size - 1, header_str + "".join(buff)
                 buff = [line]
                 records_size = 1
                 bytes_size = len(line.encode("utf-8"))
             else:
                 buff.append(line)
         if buff:
-            yield records_size, header + "".join(buff)
+            yield records_size, header_str + "".join(buff)
 
 
 def _count_csv(
@@ -1291,9 +1298,9 @@ class SFBulk2Type:
         while locator:
             if locator == "INIT":
                 locator = ""
-            result = self._client.download_job_data(
                 path,
                 job_id,
+            result = self._client.download_job_data(
                 locator,
                 max_records
                 )
