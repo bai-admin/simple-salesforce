@@ -1298,9 +1298,9 @@ class SFBulk2Type:
         while locator:
             if locator == "INIT":
                 locator = ""
+            result = self._client.download_job_data(
                 path,
                 job_id,
-            result = self._client.download_job_data(
                 locator,
                 max_records
                 )
