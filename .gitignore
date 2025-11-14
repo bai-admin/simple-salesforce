@@ -1,6 +1,5 @@
 *.pyc
 build/
-dist/
 *.egg-info
 *.egg
 *.eggs
@@ -18,5 +17,6 @@ docs/simple_salesforce*.rst
 docs/modules.rst
 .vscode
 venv
+.venv
 .mypy_cache
 .python-version
